@@ -23,9 +23,11 @@ def load_stock_data(ticker, start, end):
 
 df = load_stock_data(stock, start_date, end_date)
 
-# Check if 'Close' column exists and is not all NaN
-if 'Close' not in df.columns or df['Close'].isnull().all():
-    st.error("No 'Close' price data available for this stock or data is entirely null.")
+# Properly handle null values in the 'Close' column
+if df.empty:
+    st.error("No data found for the selected stock and date range.")
+elif df['Close'].isnull().all():
+    st.error("No 'Close' price data available for this stock.")
 else:
     # Display the raw data
     st.subheader(f'Raw data of {stock}')
@@ -44,8 +46,8 @@ else:
     plot_stock_data()
 
     # Prepare the data for Linear Regression
-    data = df.filter(['Close']).copy()
-    data['Date'] = np.arange(0, len(data))  # Converting the Date to numerical format
+    data = df[['Close']].copy()  # Ensure it's a DataFrame, not a Series
+    data['Date'] = np.arange(0, len(data))  # Convert the Date to numerical format
 
     X = np.array(data['Date']).reshape(-1, 1)  # Feature
     Y = np.array(data['Close']).reshape(-1, 1)  # Target
@@ -89,7 +91,8 @@ else:
 
     # Display the predicted future prices
     st.subheader('Future Stock Price Predictions')
-    st.write(future_predictions)
+    future_df = pd.DataFrame(future_predictions, columns=['Predicted Prices'], index=pd.date_range(end_date, periods=n_days_predict+1, closed='right'))
+    st.write(future_df)
 
     # Plot future stock prices
     def plot_future_predictions():
