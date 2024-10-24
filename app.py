@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 import time  # To simulate processing time
+from pandas.errors import OutOfBoundsDatetime  # Import the correct error class
 
 # Title of the web app
 st.title('Simple Stock Price Prediction with Predefined Dataset')
