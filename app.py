@@ -1,107 +1,40 @@
 import streamlit as st
+import yfinance as yf
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-import time  # To simulate processing time
-from pandas.errors import OutOfBoundsDatetime  # Import the correct error class
 
-# Title of the web app
-st.title('Simple Stock Price Prediction with Predefined Dataset')
+# Set up the Streamlit app title
+st.title('Stock Price Prediction App')
 
-# Sidebar for user input
+# Sidebar for user inputs
 st.sidebar.header('User Input')
-n_days_predict = st.sidebar.number_input('Days to Predict Ahead', min_value=1, max_value=30, value=7)
+start_date = st.sidebar.date_input('Start Date', value=pd.to_datetime('2012-01-01'))
+end_date = st.sidebar.date_input('End Date', value=pd.to_datetime('2022-12-21'))
+stock = st.sidebar.text_input('Stock Ticker', 'GOOG')
 
-# Load predefined dataset
-@st.cache
-def load_sample_data():
-    # Simulated dataset with dates and stock prices
-    dates = pd.date_range(start="2020-01-01", periods=100)
-    prices = np.sin(np.linspace(0, 10, 100)) * 100 + 500  # Simulated stock prices
-    return pd.DataFrame({'Date': dates, 'Close': prices})
+# Load data
+st.subheader(f'Displaying data for {stock} from {start_date} to {end_date}')
+try:
+    df = yf.download(stock, start=start_date, end=end_date)
 
-df = load_sample_data()
+    # Show the first few rows of data
+    st.write("Data preview:")
+    st.dataframe(df.head())
 
-# Ensure no empty or null data
-if df.empty:
-    st.error("No data available.")
-else:
-    st.subheader('Sample Stock Data')
-    st.write(df.tail())  # Show last 5 rows
+    # Basic EDA: Display summary statistics
+    st.subheader('Basic Statistics')
+    st.write(df.describe())
 
-    # Plotting the closing price
-    def plot_stock_data():
-        plt.figure(figsize=(10, 6))
-        plt.plot(df['Date'], df['Close'], label='Closing Price')
-        plt.title('Sample Stock Closing Price History')
-        plt.xlabel('Date')
-        plt.ylabel('Price')
-        plt.legend()
-        st.pyplot(plt)
+    # Plot stock closing price
+    st.subheader('Closing Price over Time')
+    plt.figure(figsize=(10, 6))
+    plt.plot(df['Close'], label=f'{stock} Close Price')
+    plt.title(f'{stock} Closing Price')
+    plt.xlabel('Date')
+    plt.ylabel('Price')
+    plt.legend()
+    st.pyplot(plt)
 
-    plot_stock_data()
+except Exception as e:
+    st.error(f"Error: {e}")
 
-    # Prepare the data for Linear Regression
-    df['Date'] = pd.to_datetime(df['Date']).map(pd.Timestamp.toordinal)  # Convert date to numerical format
-    X = df['Date'].values.reshape(-1, 1)  # Feature (Date)
-    Y = df['Close'].values.reshape(-1, 1)  # Target (Price)
-
-    # Train-test split
-    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
-
-    # Linear Regression model
-    model = LinearRegression()
-
-    # Train the model
-    with st.spinner('Training the model...'):
-        model.fit(X_train, Y_train)
-        time.sleep(1)
-
-    st.success('Model training completed!')
-
-    # Predict stock prices on test set
-    predictions = model.predict(X_test)
-
-    # Plotting predicted vs actual prices
-    st.subheader('Predicted vs Actual Closing Prices')
-    def plot_predictions():
-        plt.figure(figsize=(10, 6))
-        plt.scatter(X_test, Y_test, color='green', label='Actual Prices')
-        plt.plot(X_test, predictions, color='red', label='Predicted Prices')
-        plt.title('Price Prediction (Test Data)')
-        plt.xlabel('Time')
-        plt.ylabel('Price')
-        plt.legend()
-        st.pyplot(plt)
-
-    plot_predictions()
-
-    # Predicting future stock prices
-    last_day = X[-1][0]
-    future_dates = np.arange(last_day + 1, last_day + n_days_predict + 1).reshape(-1, 1)
-    future_predictions = model.predict(future_dates)
-
-    # Convert ordinal numbers back to dates for future predictions (Limit to a reasonable range)
-    try:
-        future_days = pd.to_datetime(future_dates.flatten(), origin='1970-01-01', unit='D')
-    except OutOfBoundsDatetime:
-        st.error("The predicted date range is too far in the future. Please reduce the number of days to predict.")
-
-    # Display the predicted future prices
-    st.subheader('Future Stock Price Predictions')
-    future_df = pd.DataFrame(future_predictions, columns=['Predicted Prices'], index=future_days)
-    st.write(future_df)
-
-    # Plot future stock prices
-    def plot_future_predictions():
-        plt.figure(figsize=(10, 6))
-        plt.plot(future_days, future_predictions, 'r', label='Predicted Future Prices')
-        plt.title('Future Stock Price Prediction')
-        plt.xlabel('Date')
-        plt.ylabel('Price')
-        plt.legend()
-        st.pyplot(plt)
-
-    plot_future_predictions()
