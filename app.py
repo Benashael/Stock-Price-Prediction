@@ -6,6 +6,7 @@ from sklearn.preprocessing import MinMaxScaler
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, LSTM
 import yfinance as yf
+import time  # To simulate processing time
 
 # Title of the web app
 st.title('Stock Price Prediction using LSTM')
@@ -16,7 +17,7 @@ start_date = st.sidebar.date_input('Start Date', value=pd.to_datetime('2012-01-0
 end_date = st.sidebar.date_input('End Date', value=pd.to_datetime('2022-12-21'))
 stock = st.sidebar.text_input('Stock Ticker', 'GOOG')
 n_days_predict = st.sidebar.number_input('Days to Predict Ahead', min_value=1, max_value=30, value=7)
-epochs = st.sidebar.slider('Number of Epochs for Training', min_value=1, max_value=100, value=5)
+epochs = st.sidebar.slider('Number of Epochs for Training', min_value=1, max_value=20, value=3)  # Reduced max epochs to 20
 
 # Load the data
 st.subheader(f'Historical Data for {stock}')
@@ -46,9 +47,8 @@ plt.ylabel('Price')
 plt.legend()
 st.pyplot(plt)
 
-# Prepare the data
+# Data preparation for LSTM
 st.subheader('Data Preparation & LSTM Model Training')
-
 df.dropna(inplace=True)
 data_train = pd.DataFrame(df['Close'][0:int(len(df) * 0.80)])
 data_test = pd.DataFrame(df['Close'][int(len(df) * 0.80):])
@@ -65,20 +65,23 @@ for i in range(100, data_train_scaled.shape[0]):
 
 x_train, y_train = np.array(x_train), np.array(y_train)
 
-# Build the LSTM model
-model = Sequential()
-model.add(LSTM(units=50, activation='relu', return_sequences=True, input_shape=(x_train.shape[1], 1)))
-model.add(Dropout(0.2))
-model.add(LSTM(units=60, activation='relu', return_sequences=True))
-model.add(Dropout(0.3))
-model.add(LSTM(units=80, activation='relu', return_sequences=True))
-model.add(Dropout(0.4))
-model.add(LSTM(units=120, activation='relu'))
-model.add(Dropout(0.5))
-model.add(Dense(units=1))
+# Add a spinner while the model is being trained
+with st.spinner('Training the LSTM model...'):
+    # Build the LSTM model
+    model = Sequential()
+    model.add(LSTM(units=50, activation='relu', return_sequences=True, input_shape=(x_train.shape[1], 1)))
+    model.add(Dropout(0.2))
+    model.add(LSTM(units=60, activation='relu', return_sequences=True))
+    model.add(Dropout(0.3))
+    model.add(LSTM(units=80, activation='relu', return_sequences=True))
+    model.add(Dropout(0.4))
+    model.add(LSTM(units=120, activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(units=1))
 
-model.compile(optimizer='adam', loss='mean_squared_error')
-model.fit(x_train, y_train, epochs=epochs, batch_size=32, verbose=1)
+    model.compile(optimizer='adam', loss='mean_squared_error')
+    time.sleep(2)  # Simulate a small delay
+    model.fit(x_train, y_train, epochs=epochs, batch_size=32, verbose=0)  # Use verbose=0 to reduce logging
 
 # Prepare test data
 past_100_days = data_train.tail(100)
@@ -95,10 +98,12 @@ for i in range(100, input_data.shape[0]):
 x_test, y_test = np.array(x_test), np.array(y_test)
 
 # Predictions
-y_predicted = model.predict(x_test)
-scaler_factor = 1 / scaler.scale_[0]
-y_predicted = y_predicted * scaler_factor
-y_test = y_test * scaler_factor
+with st.spinner('Making predictions...'):
+    y_predicted = model.predict(x_test)
+    scaler_factor = 1 / scaler.scale_[0]
+    y_predicted = y_predicted * scaler_factor
+    y_test = y_test * scaler_factor
+    time.sleep(1)  # Simulate delay
 
 # Plot predictions
 st.subheader('Predicted vs Original Closing Price')
@@ -118,13 +123,15 @@ last_100_days_data = input_data[-100:]
 last_100_days_data = np.reshape(last_100_days_data, (1, last_100_days_data.shape[0], 1))
 
 predicted_future = []
-for _ in range(n_days_predict):
-    prediction = model.predict(last_100_days_data)
-    predicted_future.append(prediction[0][0])
-    
-    # Update the input for the next prediction
-    next_input = np.append(last_100_days_data[:, 1:, :], [[prediction]], axis=1)
-    last_100_days_data = next_input
+with st.spinner('Predicting future stock prices...'):
+    for _ in range(n_days_predict):
+        prediction = model.predict(last_100_days_data)
+        predicted_future.append(prediction[0][0])
+        
+        # Update the input for the next prediction
+        next_input = np.append(last_100_days_data[:, 1:, :], [[prediction]], axis=1)
+        last_100_days_data = next_input
+    time.sleep(1)  # Simulate delay
 
 # Convert predicted future prices back to the original scale
 predicted_future = np.array(predicted_future) * scaler_factor
