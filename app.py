@@ -26,8 +26,10 @@ def load_stock_data(ticker, start, end):
 df = load_stock_data(stock, start_date, end_date)
 
 # Check if 'Close' column exists and contains data
-if 'Close' not in df.columns or df['Close'].isnull().all():
+if 'Close' not in df.columns:
     st.error("No 'Close' price data available for this stock.")
+elif df['Close'].isnull().all():
+    st.error("The 'Close' price data is entirely null for this stock.")
 else:
     # Display the raw data
     st.subheader(f'Raw data of {stock}')
