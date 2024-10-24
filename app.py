@@ -82,14 +82,16 @@ else:
     future_dates = np.arange(last_day + 1, last_day + n_days_predict + 1).reshape(-1, 1)
     future_predictions = model.predict(future_dates)
 
+    # Convert ordinal numbers back to dates for future predictions
+    future_days = pd.to_datetime(future_dates.flatten(), origin='1970-01-01', unit='D')
+
     # Display the predicted future prices
     st.subheader('Future Stock Price Predictions')
-    future_df = pd.DataFrame(future_predictions, columns=['Predicted Prices'], index=pd.date_range(df['Date'].max(), periods=n_days_predict+1, closed='right'))
+    future_df = pd.DataFrame(future_predictions, columns=['Predicted Prices'], index=future_days)
     st.write(future_df)
 
     # Plot future stock prices
     def plot_future_predictions():
-        future_days = pd.date_range(df['Date'].max(), periods=n_days_predict+1, closed='right')
         plt.figure(figsize=(10, 6))
         plt.plot(future_days, future_predictions, 'r', label='Predicted Future Prices')
         plt.title('Future Stock Price Prediction')
@@ -99,4 +101,3 @@ else:
         st.pyplot(plt)
 
     plot_future_predictions()
-
