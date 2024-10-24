@@ -2,14 +2,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import MinMaxScaler
-from keras.models import Sequential
-from keras.layers import Dense, Dropout, LSTM
+from sklearn.linear_model import LinearRegression
 import yfinance as yf
 import time  # To simulate processing time
 
 # Title of the web app
-st.title('Stock Price Prediction using LSTM')
+st.title('Simple Stock Price Prediction')
 
 # Sidebar for user input
 st.sidebar.header('User Input')
@@ -47,107 +45,63 @@ else:
 
     plot_stock_data()
 
-    # Prepare the data for training the LSTM
+    # Prepare the data for Linear Regression
     data = df.filter(['Close'])
-    dataset = data.values
+    data['Date'] = np.arange(0, len(data))  # Converting the Date to numerical format
 
-    # Check if dataset has any data before scaling
-    if dataset.size == 0:
-        st.error("Insufficient data to perform scaling and prediction.")
-    else:
-        scaler = MinMaxScaler(feature_range=(0, 1))
-        scaled_data = scaler.fit_transform(dataset)
+    X = np.array(data['Date']).reshape(-1, 1)  # Feature
+    Y = np.array(data['Close']).reshape(-1, 1)  # Target
 
-        train_data_len = int(len(scaled_data) * 0.8)
-        train_data = scaled_data[0:train_data_len]
-        test_data = scaled_data[train_data_len - 100:]
+    # Train-test split
+    train_size = int(len(X) * 0.8)
+    X_train, X_test = X[:train_size], X[train_size:]
+    Y_train, Y_test = Y[:train_size], Y[train_size:]
 
-        # Create training datasets
-        def create_dataset(data, time_step=100):
-            x, y = [], []
-            for i in range(time_step, len(data)):
-                x.append(data[i-time_step:i])
-                y.append(data[i, 0])
-            return np.array(x), np.array(y)
+    # Linear Regression model
+    model = LinearRegression()
 
-        X_train, Y_train = create_dataset(train_data)
-        X_test, Y_test = create_dataset(test_data)
+    # Train the model
+    with st.spinner('Training the model...'):
+        model.fit(X_train, Y_train)
+        time.sleep(1)
 
-        # Reshaping the data to 3D for LSTM
-        X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
-        X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
+    st.success('Model training completed!')
 
-        # Build the LSTM model
-        model = Sequential()
-        model.add(LSTM(50, return_sequences=True, input_shape=(X_train.shape[1], 1)))
-        model.add(Dropout(0.2))
-        model.add(LSTM(60, return_sequences=True))
-        model.add(Dropout(0.3))
-        model.add(LSTM(80, return_sequences=True))
-        model.add(Dropout(0.4))
-        model.add(LSTM(120))
-        model.add(Dropout(0.5))
-        model.add(Dense(1))
+    # Predict stock prices on test set
+    predictions = model.predict(X_test)
 
-        # Compile the model
-        model.compile(optimizer='adam', loss='mean_squared_error')
+    # Plotting predicted vs actual prices
+    st.subheader('Predicted vs Actual Closing Prices')
+    def plot_predictions():
+        plt.figure(figsize=(10, 6))
+        plt.plot(Y_test, 'g', label='Actual Prices')
+        plt.plot(predictions, 'r', label='Predicted Prices')
+        plt.title(f'{stock} Price Prediction (Test Data)')
+        plt.xlabel('Time')
+        plt.ylabel('Price')
+        plt.legend()
+        st.pyplot(plt)
 
-        # Train the model (epochs fixed at 1 for reduced computing time)
-        with st.spinner('Training the model...'):
-            model.fit(X_train, Y_train, epochs=1, batch_size=32)
-            time.sleep(1)  # Simulating delay for better UX
+    plot_predictions()
 
-        st.success('Model training completed!')
+    # Predicting future stock prices
+    last_day = X[-1][0]
+    future_dates = np.arange(last_day + 1, last_day + n_days_predict + 1).reshape(-1, 1)
+    future_predictions = model.predict(future_dates)
 
-        # Predicting stock prices
-        predictions = model.predict(X_test)
-        predictions = scaler.inverse_transform(predictions)
+    # Display the predicted future prices
+    st.subheader('Future Stock Price Predictions')
+    st.write(future_predictions)
 
-        # Plotting predicted vs actual prices
-        st.subheader('Predicted vs Actual Closing Prices')
-        def plot_predictions():
-            plt.figure(figsize=(10, 6))
-            plt.plot(scaler.inverse_transform(Y_test.reshape(-1, 1)), 'g', label='Actual Prices')
-            plt.plot(predictions, 'r', label='Predicted Prices')
-            plt.title(f'{stock} Price Prediction')
-            plt.xlabel('Time')
-            plt.ylabel('Price')
-            plt.legend()
-            st.pyplot(plt)
+    # Plot future stock prices
+    def plot_future_predictions():
+        future_days = pd.date_range(end_date, periods=n_days_predict+1, closed='right')
+        plt.figure(figsize=(10, 6))
+        plt.plot(future_days, future_predictions, 'r', label='Predicted Future Prices')
+        plt.title(f'{stock} Future Stock Price Prediction')
+        plt.xlabel('Date')
+        plt.ylabel('Price')
+        plt.legend()
+        st.pyplot(plt)
 
-        plot_predictions()
-
-        # Predicting future stock prices
-        last_100_days_data = scaled_data[-100:]
-        last_100_days_data = np.reshape(last_100_days_data, (1, last_100_days_data.shape[0], 1))
-
-        predicted_future = []
-        with st.spinner('Predicting future stock prices...'):
-            for _ in range(n_days_predict):
-                prediction = model.predict(last_100_days_data)
-                predicted_future.append(prediction[0][0])
-
-                # Update the input for the next prediction
-                next_input = np.concatenate([last_100_days_data[:, 1:, :], np.reshape(prediction, (1, 1, 1))], axis=1)
-                last_100_days_data = next_input
-            time.sleep(1)  # Simulating delay
-
-        # Scale back the future predictions
-        predicted_future_prices = scaler.inverse_transform(np.array(predicted_future).reshape(-1, 1))
-
-        # Display the predicted future prices
-        st.subheader('Future Stock Price Predictions')
-        st.write(predicted_future_prices)
-
-        # Plot future stock prices
-        def plot_future_predictions():
-            future_dates = pd.date_range(end_date, periods=n_days_predict+1, closed='right')
-            plt.figure(figsize=(10, 6))
-            plt.plot(future_dates, predicted_future_prices, 'r', label='Predicted Future Prices')
-            plt.title(f'{stock} Future Stock Price Prediction')
-            plt.xlabel('Date')
-            plt.ylabel('Price')
-            plt.legend()
-            st.pyplot(plt)
-
-        plot_future_predictions()
+    plot_future_predictions()
