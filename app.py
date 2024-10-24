@@ -17,109 +17,98 @@ start_date = st.sidebar.date_input('Start Date', value=pd.to_datetime('2012-01-0
 end_date = st.sidebar.date_input('End Date', value=pd.to_datetime('2022-12-21'))
 stock = st.sidebar.text_input('Stock Ticker', 'GOOG')
 n_days_predict = st.sidebar.number_input('Days to Predict Ahead', min_value=1, max_value=30, value=7)
-epochs = 1  # Reduced max epochs to 20
 
-# Load the data
-st.subheader(f'Historical Data for {stock}')
-df = yf.download(stock, start=start_date, end=end_date)
+# Fetch the stock data
+@st.cache
+def load_stock_data(ticker, start, end):
+    return yf.download(ticker, start, end)
+
+df = load_stock_data(stock, start_date, end_date)
+
+# Display the raw data
+st.subheader(f'Raw data of {stock}')
 st.write(df.tail())
 
-# Plot closing price
-st.subheader('Closing Price vs Time')
-plt.figure(figsize=(10, 6))
-plt.plot(df['Close'], label='Closing Price')
-plt.xlabel('Date')
-plt.ylabel('Price')
-plt.legend()
-st.pyplot(plt)
+# Plotting the closing price
+def plot_stock_data():
+    plt.figure(figsize=(10, 6))
+    plt.plot(df['Close'], label='Closing Price')
+    plt.title(f'{stock} Closing Price History')
+    plt.xlabel('Date')
+    plt.ylabel('Price')
+    plt.legend()
+    st.pyplot(plt)
 
-# Moving Averages
-st.subheader('100 Days & 200 Days Moving Average')
-ma_100 = df['Close'].rolling(100).mean()
-ma_200 = df['Close'].rolling(200).mean()
+plot_stock_data()
 
-plt.figure(figsize=(10, 6))
-plt.plot(ma_100, 'r', label='100 Days MA')
-plt.plot(ma_200, 'b', label='200 Days MA')
-plt.plot(df['Close'], 'g', label='Closing Price')
-plt.xlabel('Date')
-plt.ylabel('Price')
-plt.legend()
-st.pyplot(plt)
-
-# Data preparation for LSTM
-st.subheader('Data Preparation & LSTM Model Training')
-df.dropna(inplace=True)
-data_train = pd.DataFrame(df['Close'][0:int(len(df) * 0.80)])
-data_test = pd.DataFrame(df['Close'][int(len(df) * 0.80):])
+# Prepare the data for training the LSTM
+data = df.filter(['Close'])
+dataset = data.values
 
 scaler = MinMaxScaler(feature_range=(0, 1))
-data_train_scaled = scaler.fit_transform(data_train)
+scaled_data = scaler.fit_transform(dataset)
 
-# Creating x_train and y_train
-x_train = []
-y_train = []
-for i in range(100, data_train_scaled.shape[0]):
-    x_train.append(data_train_scaled[i-100:i])
-    y_train.append(data_train_scaled[i, 0])
+train_data_len = int(len(scaled_data) * 0.8)
+train_data = scaled_data[0:train_data_len]
+test_data = scaled_data[train_data_len - 100:]
 
-x_train, y_train = np.array(x_train), np.array(y_train)
+# Create training datasets
+def create_dataset(data, time_step=100):
+    x, y = [], []
+    for i in range(time_step, len(data)):
+        x.append(data[i-time_step:i])
+        y.append(data[i, 0])
+    return np.array(x), np.array(y)
 
-# Add a spinner while the model is being trained
-with st.spinner('Training the LSTM model...'):
-    # Build the LSTM model
-    model = Sequential()
-    model.add(LSTM(units=50, activation='relu', return_sequences=True, input_shape=(x_train.shape[1], 1)))
-    model.add(Dropout(0.2))
-    model.add(LSTM(units=60, activation='relu', return_sequences=True))
-    model.add(Dropout(0.3))
-    model.add(LSTM(units=80, activation='relu', return_sequences=True))
-    model.add(Dropout(0.4))
-    model.add(LSTM(units=120, activation='relu'))
-    model.add(Dropout(0.5))
-    model.add(Dense(units=1))
+X_train, Y_train = create_dataset(train_data)
+X_test, Y_test = create_dataset(test_data)
 
-    model.compile(optimizer='adam', loss='mean_squared_error')
-    time.sleep(2)  # Simulate a small delay
-    model.fit(x_train, y_train, epochs=epochs, batch_size=32, verbose=0)  # Use verbose=0 to reduce logging
+# Reshaping the data to 3D for LSTM
+X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
+X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
 
-# Prepare test data
-past_100_days = data_train.tail(100)
-final_df = pd.concat([past_100_days, data_test], ignore_index=True)
+# Build the LSTM model
+model = Sequential()
+model.add(LSTM(50, return_sequences=True, input_shape=(X_train.shape[1], 1)))
+model.add(Dropout(0.2))
+model.add(LSTM(60, return_sequences=True))
+model.add(Dropout(0.3))
+model.add(LSTM(80, return_sequences=True))
+model.add(Dropout(0.4))
+model.add(LSTM(120))
+model.add(Dropout(0.5))
+model.add(Dense(1))
 
-input_data = scaler.transform(final_df)
+# Compile the model
+model.compile(optimizer='adam', loss='mean_squared_error')
 
-x_test = []
-y_test = []
-for i in range(100, input_data.shape[0]):
-    x_test.append(input_data[i-100:i])
-    y_test.append(input_data[i, 0])
+# Train the model (epochs fixed at 1 for reduced computing time)
+with st.spinner('Training the model...'):
+    model.fit(X_train, Y_train, epochs=1, batch_size=32)
+    time.sleep(1)  # Simulating delay for better UX
 
-x_test, y_test = np.array(x_test), np.array(y_test)
+st.success('Model training completed!')
 
-# Predictions
-with st.spinner('Making predictions...'):
-    y_predicted = model.predict(x_test)
-    scaler_factor = 1 / scaler.scale_[0]
-    y_predicted = y_predicted * scaler_factor
-    y_test = y_test * scaler_factor
-    time.sleep(1)  # Simulate delay
+# Predicting stock prices
+predictions = model.predict(X_test)
+predictions = scaler.inverse_transform(predictions)
 
-# Plot predictions
-st.subheader('Predicted vs Original Closing Price')
-plt.figure(figsize=(10, 6))
-plt.plot(y_test, 'g', label='Original Price')
-plt.plot(y_predicted, 'r', label='Predicted Price')
-plt.xlabel('Time')
-plt.ylabel('Price')
-plt.legend()
-st.pyplot(plt)
+# Plotting predicted vs actual prices
+st.subheader('Predicted vs Actual Closing Prices')
+def plot_predictions():
+    plt.figure(figsize=(10, 6))
+    plt.plot(scaler.inverse_transform(Y_test.reshape(-1, 1)), 'g', label='Actual Prices')
+    plt.plot(predictions, 'r', label='Predicted Prices')
+    plt.title(f'{stock} Price Prediction')
+    plt.xlabel('Time')
+    plt.ylabel('Price')
+    plt.legend()
+    st.pyplot(plt)
 
-# Predict future prices for the next 'n_days_predict' days
-st.subheader(f'Prediction for Next {n_days_predict} Days')
+plot_predictions()
 
-# Use the last 100 days of the actual data to make future predictions
-last_100_days_data = input_data[-100:]
+# Predicting future stock prices
+last_100_days_data = scaled_data[-100:]
 last_100_days_data = np.reshape(last_100_days_data, (1, last_100_days_data.shape[0], 1))
 
 predicted_future = []
@@ -127,19 +116,28 @@ with st.spinner('Predicting future stock prices...'):
     for _ in range(n_days_predict):
         prediction = model.predict(last_100_days_data)
         predicted_future.append(prediction[0][0])
-        
+
         # Update the input for the next prediction
-        next_input = np.append(last_100_days_data[:, 1:, :], [[prediction]], axis=1)
+        next_input = np.concatenate([last_100_days_data[:, 1:, :], np.reshape(prediction, (1, 1, 1))], axis=1)
         last_100_days_data = next_input
-    time.sleep(1)  # Simulate delay
+    time.sleep(1)  # Simulating delay
 
-# Convert predicted future prices back to the original scale
-predicted_future = np.array(predicted_future) * scaler_factor
+# Scale back the future predictions
+predicted_future_prices = scaler.inverse_transform(np.array(predicted_future).reshape(-1, 1))
 
-# Plot future predictions
-plt.figure(figsize=(10, 6))
-plt.plot(range(1, n_days_predict + 1), predicted_future, 'r', label=f'Next {n_days_predict} Days Predicted Price')
-plt.xlabel('Days Ahead')
-plt.ylabel('Price')
-plt.legend()
-st.pyplot(plt)
+# Display the predicted future prices
+st.subheader('Future Stock Price Predictions')
+st.write(predicted_future_prices)
+
+# Plot future stock prices
+def plot_future_predictions():
+    future_dates = pd.date_range(end_date, periods=n_days_predict+1, closed='right')
+    plt.figure(figsize=(10, 6))
+    plt.plot(future_dates, predicted_future_prices, 'r', label='Predicted Future Prices')
+    plt.title(f'{stock} Future Stock Price Prediction')
+    plt.xlabel('Date')
+    plt.ylabel('Price')
+    plt.legend()
+    st.pyplot(plt)
+
+plot_future_predictions()
