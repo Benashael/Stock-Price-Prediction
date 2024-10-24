@@ -17,7 +17,7 @@ start_date = st.sidebar.date_input('Start Date', value=pd.to_datetime('2012-01-0
 end_date = st.sidebar.date_input('End Date', value=pd.to_datetime('2022-12-21'))
 stock = st.sidebar.text_input('Stock Ticker', 'GOOG')
 n_days_predict = st.sidebar.number_input('Days to Predict Ahead', min_value=1, max_value=30, value=7)
-epochs = st.sidebar.slider('Number of Epochs for Training', min_value=1, max_value=20, value=3)  # Reduced max epochs to 20
+epochs = 1  # Reduced max epochs to 20
 
 # Load the data
 st.subheader(f'Historical Data for {stock}')
