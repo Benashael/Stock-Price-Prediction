@@ -23,85 +23,87 @@ def load_stock_data(ticker, start, end):
 
 df = load_stock_data(stock, start_date, end_date)
 
-# Check if 'Close' column exists and contains data
+# Check if 'Close' column exists
 if 'Close' not in df.columns:
     st.error("No 'Close' price data available for this stock.")
-elif df['Close'].isnull().all():
-    st.error("The 'Close' price data is entirely null for this stock.")
 else:
-    # Display the raw data
-    st.subheader(f'Raw data of {stock}')
-    st.write(df.tail())
+    # Check if 'Close' column contains all NaN values
+    if df['Close'].isnull().all():
+        st.error("The 'Close' price data is entirely null for this stock.")
+    else:
+        # Display the raw data
+        st.subheader(f'Raw data of {stock}')
+        st.write(df.tail())
 
-    # Plotting the closing price
-    def plot_stock_data():
-        plt.figure(figsize=(10, 6))
-        plt.plot(df['Close'], label='Closing Price')
-        plt.title(f'{stock} Closing Price History')
-        plt.xlabel('Date')
-        plt.ylabel('Price')
-        plt.legend()
-        st.pyplot(plt)
+        # Plotting the closing price
+        def plot_stock_data():
+            plt.figure(figsize=(10, 6))
+            plt.plot(df['Close'], label='Closing Price')
+            plt.title(f'{stock} Closing Price History')
+            plt.xlabel('Date')
+            plt.ylabel('Price')
+            plt.legend()
+            st.pyplot(plt)
 
-    plot_stock_data()
+        plot_stock_data()
 
-    # Prepare the data for Linear Regression
-    data = df.filter(['Close'])
-    data['Date'] = np.arange(0, len(data))  # Converting the Date to numerical format
+        # Prepare the data for Linear Regression
+        data = df.filter(['Close'])
+        data['Date'] = np.arange(0, len(data))  # Converting the Date to numerical format
 
-    X = np.array(data['Date']).reshape(-1, 1)  # Feature
-    Y = np.array(data['Close']).reshape(-1, 1)  # Target
+        X = np.array(data['Date']).reshape(-1, 1)  # Feature
+        Y = np.array(data['Close']).reshape(-1, 1)  # Target
 
-    # Train-test split
-    train_size = int(len(X) * 0.8)
-    X_train, X_test = X[:train_size], X[train_size:]
-    Y_train, Y_test = Y[:train_size], Y[train_size:]
+        # Train-test split
+        train_size = int(len(X) * 0.8)
+        X_train, X_test = X[:train_size], X[train_size:]
+        Y_train, Y_test = Y[:train_size], Y[train_size:]
 
-    # Linear Regression model
-    model = LinearRegression()
+        # Linear Regression model
+        model = LinearRegression()
 
-    # Train the model
-    with st.spinner('Training the model...'):
-        model.fit(X_train, Y_train)
-        time.sleep(1)
+        # Train the model
+        with st.spinner('Training the model...'):
+            model.fit(X_train, Y_train)
+            time.sleep(1)
 
-    st.success('Model training completed!')
+        st.success('Model training completed!')
 
-    # Predict stock prices on test set
-    predictions = model.predict(X_test)
+        # Predict stock prices on test set
+        predictions = model.predict(X_test)
 
-    # Plotting predicted vs actual prices
-    st.subheader('Predicted vs Actual Closing Prices')
-    def plot_predictions():
-        plt.figure(figsize=(10, 6))
-        plt.plot(Y_test, 'g', label='Actual Prices')
-        plt.plot(predictions, 'r', label='Predicted Prices')
-        plt.title(f'{stock} Price Prediction (Test Data)')
-        plt.xlabel('Time')
-        plt.ylabel('Price')
-        plt.legend()
-        st.pyplot(plt)
+        # Plotting predicted vs actual prices
+        st.subheader('Predicted vs Actual Closing Prices')
+        def plot_predictions():
+            plt.figure(figsize=(10, 6))
+            plt.plot(Y_test, 'g', label='Actual Prices')
+            plt.plot(predictions, 'r', label='Predicted Prices')
+            plt.title(f'{stock} Price Prediction (Test Data)')
+            plt.xlabel('Time')
+            plt.ylabel('Price')
+            plt.legend()
+            st.pyplot(plt)
 
-    plot_predictions()
+        plot_predictions()
 
-    # Predicting future stock prices
-    last_day = X[-1][0]
-    future_dates = np.arange(last_day + 1, last_day + n_days_predict + 1).reshape(-1, 1)
-    future_predictions = model.predict(future_dates)
+        # Predicting future stock prices
+        last_day = X[-1][0]
+        future_dates = np.arange(last_day + 1, last_day + n_days_predict + 1).reshape(-1, 1)
+        future_predictions = model.predict(future_dates)
 
-    # Display the predicted future prices
-    st.subheader('Future Stock Price Predictions')
-    st.write(future_predictions)
+        # Display the predicted future prices
+        st.subheader('Future Stock Price Predictions')
+        st.write(future_predictions)
 
-    # Plot future stock prices
-    def plot_future_predictions():
-        future_days = pd.date_range(end_date, periods=n_days_predict+1, closed='right')
-        plt.figure(figsize=(10, 6))
-        plt.plot(future_days, future_predictions, 'r', label='Predicted Future Prices')
-        plt.title(f'{stock} Future Stock Price Prediction')
-        plt.xlabel('Date')
-        plt.ylabel('Price')
-        plt.legend()
-        st.pyplot(plt)
+        # Plot future stock prices
+        def plot_future_predictions():
+            future_days = pd.date_range(end_date, periods=n_days_predict+1, closed='right')
+            plt.figure(figsize=(10, 6))
+            plt.plot(future_days, future_predictions, 'r', label='Predicted Future Prices')
+            plt.title(f'{stock} Future Stock Price Prediction')
+            plt.xlabel('Date')
+            plt.ylabel('Price')
+            plt.legend()
+            st.pyplot(plt)
 
-    plot_future_predictions()
+        plot_future_predictions()
