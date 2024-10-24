@@ -16,7 +16,7 @@ n_days_predict = st.sidebar.number_input('Days to Predict Ahead', min_value=1, m
 # Load predefined dataset
 @st.cache
 def load_sample_data():
-    # Here I'm using a sample dataset that mimics stock prices
+    # Simulated dataset with dates and stock prices
     dates = pd.date_range(start="2020-01-01", periods=100)
     prices = np.sin(np.linspace(0, 10, 100)) * 100 + 500  # Simulated stock prices
     return pd.DataFrame({'Date': dates, 'Close': prices})
@@ -82,8 +82,11 @@ else:
     future_dates = np.arange(last_day + 1, last_day + n_days_predict + 1).reshape(-1, 1)
     future_predictions = model.predict(future_dates)
 
-    # Convert ordinal numbers back to dates for future predictions
-    future_days = pd.to_datetime(future_dates.flatten(), origin='1970-01-01', unit='D')
+    # Convert ordinal numbers back to dates for future predictions (Limit to a reasonable range)
+    try:
+        future_days = pd.to_datetime(future_dates.flatten(), origin='1970-01-01', unit='D')
+    except OutOfBoundsDatetime:
+        st.error("The predicted date range is too far in the future. Please reduce the number of days to predict.")
 
     # Display the predicted future prices
     st.subheader('Future Stock Price Predictions')
